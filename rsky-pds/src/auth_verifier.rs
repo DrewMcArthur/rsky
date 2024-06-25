@@ -635,9 +635,7 @@ pub async fn validate_access_token<'r>(
     opts: Option<ValidateAccessTokenOpts>,
 ) -> Result<AccessOutput> {
     let mut options = VerificationOptions::default();
-    options.allowed_audiences = Some(HashSet::from_strings(&[
-        env::var("PDS_SERVICE_DID").unwrap()
-    ]));
+    options.allowed_audiences = Some(HashSet::from_strings(&[env::var("PDS_SERVICE_DID")?]));
     let ValidatedBearer {
         did,
         scope,
