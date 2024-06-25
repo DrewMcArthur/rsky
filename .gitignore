@@ -3,7 +3,6 @@
 Cargo.lock
 .openapi-generator-ignore
 .openapi-generator
-.github
 .DS_Store
 .cargo
 NOTE.md
@@ -20,3 +19,4 @@ NOTE.md
 .env.prod
 .env*.bak
 /venv/
+/botenv/
