@@ -2,13 +2,14 @@ use rocket::futures::SinkExt;
 use rocket_ws::{Channel, Message, WebSocket};
 
 use crate::models::RepoSeq;
+use crate::SharedSequencer;
 
 #[rocket::get("/xrpc/com.atproto.sync.subscribeRepos")]
 pub async fn subscribe_repos<'a>(
     socket: WebSocket,
-    sequencer: &'a rocket::State<crate::sequencer::Sequencer>,
+    state: &'a rocket::State<SharedSequencer>,
 ) -> Channel<'a> {
-    let mut rx = sequencer.subscribers.subscribe();
+    let mut rx = state.sequencer.write().await.subscribers.subscribe();
 
     // @TODO: Send backfilled messages
     // i think based on parameters in the original request,
