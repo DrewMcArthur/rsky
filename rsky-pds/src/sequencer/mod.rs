@@ -7,6 +7,7 @@ use crate::sequencer::events::{
     format_seq_account_evt, format_seq_commit, format_seq_handle_update, format_seq_identity_evt,
     format_seq_tombstone,
 };
+use crate::subscribers::Subscribers;
 use anyhow::Result;
 use diesel::*;
 
@@ -15,6 +16,7 @@ pub struct Sequencer {
     pub destroyed: bool,
     pub tries_with_no_results: u64,
     pub crawlers: Crawlers,
+    pub subscribers: Subscribers,
     pub last_seen: u64,
 }
 
@@ -25,22 +27,26 @@ impl Sequencer {
             tries_with_no_results: 0,
             last_seen: last_seen.unwrap_or(0),
             crawlers,
+            subscribers: Subscribers::new(),
         }
     }
 
     pub async fn sequence_evt(&mut self, evt: models::RepoSeq) -> Result<()> {
         use crate::schema::pds::repo_seq::dsl as RepoSeqSchema;
         let conn = &mut establish_connection()?;
-
+        let e = evt.clone();
         insert_into(RepoSeqSchema::repo_seq)
             .values((
-                RepoSeqSchema::did.eq(evt.did),
-                RepoSeqSchema::event.eq(evt.event),
-                RepoSeqSchema::eventType.eq(evt.event_type),
-                RepoSeqSchema::sequencedAt.eq(evt.sequenced_at),
+                RepoSeqSchema::did.eq(e.did),
+                RepoSeqSchema::event.eq(e.event),
+                RepoSeqSchema::eventType.eq(e.event_type),
+                RepoSeqSchema::sequencedAt.eq(e.sequenced_at),
             ))
             .execute(conn)?;
-        self.crawlers.notify_of_update().await
+
+        self.subscribers.notify(evt)?;
+        self.crawlers.notify_of_update().await?;
+        Ok(())
     }
 
     pub async fn sequence_commit(
