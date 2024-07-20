@@ -25,3 +25,7 @@ serde_bytes = "0.11.9"
 thiserror = "1.0.40"
 secp256k1 = { version = "0.28.2", features = ["serde", "rand"] }
 libipld = "0.16.0"
+futures = "0.3.30"
+bytes = "1.6.1"
+anyhow = "1.0.86"
+rsky-common-web = { version = "0.1.0", path = "../rsky-common-web" }
