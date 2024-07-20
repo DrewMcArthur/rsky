@@ -1,3 +1,5 @@
+use bytes::Bytes;
+use futures::stream::Stream;
 use std::fmt::Display;
 
 use serde_json::Value;
@@ -118,6 +120,11 @@ pub struct DeleteRecordInput {
     /// Compare and swap with the previous commit by CID.
     #[serde(rename = "swapCommit", skip_serializing_if = "Option::is_none")]
     pub swap_commit: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ImportRepoInput {
+    pub incoming_car: Box<dyn Stream<Item = Result<Bytes, Box<dyn std::error::Error>>> + Unpin>,
 }
 
 /// Apply a batch transaction of repository creates, updates, and deletes.
