@@ -11,3 +11,17 @@ pub struct DidKeyPlugin<'p> {
 pub struct VerifyOptions {
     pub allow_malleable_sig: Option<bool>,
 }
+
+pub trait Didable {
+    fn did(&self) -> Result<String>;
+}
+
+pub trait Signer {
+    fn sign(&self, msg: &[u8]) -> Result<[u8; 64]>;
+}
+
+pub trait Keypair: Didable + Signer {}
+
+pub trait ExportableKeypair: Keypair {
+    fn export(&self) -> Result<[u8; 32]>;
+}
