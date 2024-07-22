@@ -27,8 +27,8 @@ use super::Repo;
 
 pub struct ActorStoreConfig {
     pub directory: String,
-    pub cache_size: usize,
-    pub disable_wal_auto_checkpoint: bool,
+    pub _cache_size: usize,
+    pub _disable_wal_auto_checkpoint: bool,
 }
 
 impl ActorStoreConfig {
@@ -39,11 +39,11 @@ impl ActorStoreConfig {
         }
         ActorStoreConfig {
             directory: env::var("PDS_ACTOR_STORE_DIRECTORY").unwrap_or(db_loc("actors")),
-            cache_size: env::var("PDS_ACTOR_STORE_CACHE_SIZE")
+            _cache_size: env::var("PDS_ACTOR_STORE_CACHE_SIZE")
                 .unwrap_or("100".to_string())
                 .parse::<usize>()
                 .unwrap_or(100),
-            disable_wal_auto_checkpoint: env::var("DISABLE_WAL_AUTO_CHECKPOINT")
+            _disable_wal_auto_checkpoint: env::var("DISABLE_WAL_AUTO_CHECKPOINT")
                 .unwrap_or("false".to_string())
                 .parse::<bool>()
                 .unwrap_or(false),
@@ -455,9 +455,15 @@ mod tests {
         assert_ne!(did, second_diff_did);
         assert_ne!(diff_did, second_diff_did);
 
+        // if the provided did yields a bad `key_loc`, then `load_key` will fail,
+        // but the function should fallback and create a new key.
+        let bad_did = "did:key:bad/../key".to_string();
+        let res = actor_store.reserve_keypair(Some(bad_did.as_str()));
+        assert!(res.is_err());
+
         delete_test_keys(
             &actor_store.reserved_key_dir,
-            &[&new_did, &diff_did, &second_diff_did],
+            &[&new_did, &second_try, &diff_did, &second_diff_did],
         );
         Ok(())
     }
