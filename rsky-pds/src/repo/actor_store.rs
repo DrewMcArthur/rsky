@@ -322,19 +322,18 @@ impl ActorStore {
             .collect::<Result<Vec<Cid>>>()?)
     }
 
-    pub async fn reserve_keypair(&self, did: Option<&str>) -> Result<String> {
+    pub fn reserve_keypair(&self, did: Option<&str>) -> Result<String> {
         if let Some(did) = did {
-            assert_safe_path_part(&did);
+            assert_safe_path_part(&did)?;
             let key_loc = Path::new(&self.reserved_key_dir).join(did);
-            let key = load_key(key_loc);
+            let key = load_key(&key_loc);
             if key.is_ok() {
                 return Ok(key?.did()?);
             }
         }
         let keypair = Secp256k1Keypair::create(Some(Secp256k1KeypairOptions {
             exportable: Some(true),
-        }))
-        .await?;
+        }))?;
         let key_did = keypair.did()?;
         let key_loc = Path::new(&self.reserved_key_dir).join(&key_did);
         fs::create_dir_all(self.reserved_key_dir.clone())?;
@@ -343,7 +342,7 @@ impl ActorStore {
     }
 }
 
-fn load_key(loc: PathBuf) -> Result<Secp256k1Keypair> {
+fn load_key(loc: &PathBuf) -> Result<Secp256k1Keypair> {
     let priv_key = File::open(loc)?
         .bytes()
         .map(|b| b.unwrap())
@@ -357,13 +356,109 @@ fn load_key(loc: PathBuf) -> Result<Secp256k1Keypair> {
     )?)
 }
 
-fn assert_safe_path_part(part: &str) {
-    // TODO: need to replicate TS path.normalize
-    // let normalized = &part;
-    assert!(
-        //   part == normalized &&
-        part.as_bytes().get(0) != Some(&b'.') && !part.contains('/') && !part.contains('\\'),
-        "unsafe path part: {}",
-        part
-    )
+fn assert_safe_path_part(part: &str) -> Result<()> {
+    let normalized = Path::new(part).to_str().unwrap();
+    let is_valid_path_part = normalized == part
+        && part.as_bytes().get(0) != Some(&b'.')
+        && !part.contains('/')
+        && !part.contains('\\');
+
+    if is_valid_path_part {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("unsafe path part: {}", part))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn delete_test_keys(key_dir: &PathBuf, dids: &[&str]) {
+        for did in dids {
+            let key_loc = key_dir.join(did);
+            if key_loc.exists() {
+                fs::remove_file(key_loc).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn test_load_key() -> Result<()> {
+        let key_dir = Path::new("target").join("keys");
+        let created = Secp256k1Keypair::create(Some(Secp256k1KeypairOptions {
+            exportable: Some(true),
+        }))?;
+        fs::create_dir_all(&key_dir)?;
+        let key_loc = key_dir.join(created.did()?);
+        fs::write(&key_loc, created.export()?)?;
+
+        let loaded = load_key(&key_loc)?;
+
+        assert_eq!(created.did()?, loaded.did()?);
+        assert_eq!(created.export()?, loaded.export()?);
+
+        delete_test_keys(&key_dir, &[created.did()?.as_str()]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_assert_safe_path_part() {
+        let good = ["test".to_string(), "abc".to_string(), "123".to_string()];
+
+        for part in &good {
+            let res = assert_safe_path_part(part);
+            assert!(res.is_ok(), "{} should be valid", part);
+        }
+
+        let bad = [
+            "foo/../bar".to_string(),
+            "..".to_string(),
+            "1/2/3".to_string(),
+            ".test".to_string(),
+            "test/".to_string(),
+            "test\\test".to_string(),
+            "test/test".to_string(),
+            "test/test/".to_string(),
+            "test/test\\test".to_string(),
+        ];
+
+        for part in &bad {
+            let res = assert_safe_path_part(part);
+            assert!(res.is_err(), "{} should be invalid", part);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_reserve_keypair() -> Result<()> {
+        let did = "did:example:test".to_string();
+        let config = aws_config::from_env()
+            .endpoint_url(env::var("AWS_ENDPOINT").unwrap_or("localhost".to_owned()))
+            .load()
+            .await;
+        let blobstore = S3BlobStore::new(did.clone(), &config);
+        let actor_store = ActorStore::new(did.clone(), blobstore);
+
+        // the first reservation creates a new key, and returns its DID
+        // the second try should return the same DID as what we passed in.
+        let new_did = actor_store.reserve_keypair(None)?;
+        let second_try = actor_store.reserve_keypair(Some(new_did.as_str()))?;
+        assert_eq!(new_did, second_try);
+
+        // this time, since we're passing in a DID that doesn't have a key,
+        // it should return a new, different DID
+        let diff_did = actor_store.reserve_keypair(Some(did.as_str()))?;
+        assert_ne!(did, diff_did);
+
+        // even if we try again, it'll create another new key, different from the first.
+        let second_diff_did = actor_store.reserve_keypair(Some(did.as_str()))?;
+        assert_ne!(did, second_diff_did);
+        assert_ne!(diff_did, second_diff_did);
+
+        delete_test_keys(
+            &actor_store.reserved_key_dir,
+            &[&new_did, &diff_did, &second_diff_did],
+        );
+        Ok(())
+    }
 }

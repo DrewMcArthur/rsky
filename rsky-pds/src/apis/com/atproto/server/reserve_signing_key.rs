@@ -13,13 +13,13 @@ use rsky_lexicon::com::atproto::server::{ReserveSigningKeyInput, ReserveSigningK
     format = "json",
     data = "<body>"
 )]
-pub async fn reserve_signing_key(
+pub fn reserve_signing_key(
     body: Json<ReserveSigningKeyInput>,
     s3_config: &State<SdkConfig>,
 ) -> Result<Json<ReserveSigningKeyOutput>, status::Custom<Json<InternalErrorMessageResponse>>> {
     let did = &body.did;
     let actor_store = ActorStore::new(did.clone(), S3BlobStore::new(did.clone(), s3_config));
-    match actor_store.reserve_keypair(Some(did)).await {
+    match actor_store.reserve_keypair(Some(did)) {
         Ok(key) => Ok(Json(ReserveSigningKeyOutput { body: key })),
         Err(error) => {
             let internal_error = InternalErrorMessageResponse {

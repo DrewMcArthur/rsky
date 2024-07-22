@@ -58,7 +58,7 @@ impl Secp256k1Keypair {
         })
     }
 
-    pub async fn create(opts: Option<Secp256k1KeypairOptions>) -> Result<Self> {
+    pub fn create(opts: Option<Secp256k1KeypairOptions>) -> Result<Self> {
         let exportable = opts.unwrap_or_default().exportable.unwrap_or(false);
         let private_key = secp256k1::SecretKey::new(&mut rand::thread_rng());
         Self::new(private_key, exportable)
